@@ -7,6 +7,8 @@
   "use strict";
   const M = window.SLFModel;
   const BASE = "data/grid/";
+  // Hosts that cannot serve binary files get the same layers as base64 text.
+  const EXT = window.SLF_DATA_EXT || ".bin";
   const $ = (s, el = document) => el.querySelector(s);
   const h = (tag, attrs = {}, ...kids) => {
     const el = document.createElement(tag);
@@ -34,7 +36,9 @@
     if (!cache.has(path)) {
       cache.set(path, fetch(BASE + path).then(async (r) => {
         if (!r.ok) throw new Error(`${path}: HTTP ${r.status}`);
-        let buf = await r.arrayBuffer();
+        let buf;
+        if (EXT.endsWith(".txt")) buf = Uint8Array.from(atob((await r.text()).trim()), (c) => c.charCodeAt(0)).buffer;
+        else buf = await r.arrayBuffer();
         const b = new Uint8Array(buf, 0, 2);
         if (b[0] === 0x1f && b[1] === 0x8b) {
           const ds = new Blob([buf]).stream().pipeThrough(new DecompressionStream("gzip"));
@@ -145,8 +149,8 @@
   async function buildView(view) {
     const t = thrById(state.thr), y = state.year;
     const np = man.normal_period.join("–");
-    const nrm = () => fetchBin(`normal/${t.id}.bin`);
-    const yr = () => fetchBin(`${y}/${t.id}.bin`);
+    const nrm = () => fetchBin(`normal/${t.id}${EXT}`);
+    const yr = () => fetchBin(`${y}/${t.id}${EXT}`);
     const n = N();
     const yLabel = `${y}${isComplete(y) ? "" : ` through ${M.fmtDoy(lastDoy(y), y)}`}`;
     const meanOf = (a, idx) => a[idx] / 10;
@@ -240,7 +244,7 @@
     }
 
     if (view === "heat") {
-      const cum = await fetchBin(`${y}/cum.bin`);
+      const cum = await fetchBin(`${y}/cum${EXT}`);
       const edgesF = [500, 1000, 1500, 2000, 2500, 3000, 3500, 4000, 5000, 6000];
       const pal = edgesF.length + 1;
       const classes = [];
@@ -261,7 +265,7 @@
 
     if (view === "stage") {
       const src = state.stageSrc;
-      const layers = await Promise.all(SLF_IDS.map((id) => (src === "normal" ? fetchBin(`normal/${id}.bin`) : fetchBin(`${y}/${id}.bin`))));
+      const layers = await Promise.all(SLF_IDS.map((id) => (src === "normal" ? fetchBin(`normal/${id}${EXT}`) : fetchBin(`${y}/${id}${EXT}`))));
       const d = state.stageDoy;
       const ld = lastDoy(y), done = isComplete(y);
       const future = src === "year" && !done && d > ld;
@@ -287,7 +291,7 @@
   let landMask = null;
   const isLand = (idx) => landMask && landMask[idx] === 1;
   async function loadLand() {
-    const a = await fetchBin("normal/gdd100.bin");
+    const a = await fetchBin(`normal/gdd100${EXT}`);
     const n = N();
     landMask = new Uint8Array(n);
     for (let i = 0; i < n; i++) landMask[i] = a[2 * n + i] > 0 ? 1 : 0;
@@ -377,6 +381,7 @@
       this.marker = L.circleMarker([state.loc.lat, state.loc.lon], { radius: 7, weight: 3, color: cssVar("--accent"), fillColor: "#fff", fillOpacity: 1, interactive: false, pane: "markerPane" }).addTo(map);
       map.fitBounds([[24.6, -124.5], [49.2, -67]], { padding: [4, 4] });
       map.on("move", () => this.sync());
+      map.on("zoomend", () => this.sizeRecords());
       map.on("mousemove", (e) => this.hover(e.latlng));
       map.on("mouseout", () => { $(".readout", this.el).textContent = "Hover or tap the map for values."; });
       map.on("click", (e) => { this.hover(e.latlng); selectLocation(e.latlng.lat, e.latlng.lng); });
@@ -402,10 +407,16 @@
       this.recLayer.clearLayers();
       if (on && records) {
         for (const [lon, lat, , est] of records) {
-          L.circleMarker([lat, lon], { renderer: this.recRenderer, radius: 1.6, weight: est ? 0 : 0.9, color: "#111", fillColor: "#111", fillOpacity: est ? 0.7 : 0, opacity: 0.7, interactive: false }).addTo(this.recLayer);
+          L.circleMarker([lat, lon], { renderer: this.recRenderer, radius: 1, weight: est ? 0 : 0.8, color: "#111", fillColor: "#111", fillOpacity: est ? 0.55 : 0, opacity: 0.6, interactive: false, est }).addTo(this.recLayer);
         }
         this.recLayer.addTo(this.map);
+        this.sizeRecords();
       } else this.recLayer.remove();
+    }
+    sizeRecords() {
+      // Records sit on ~10 km cells: keep dots smaller than a cell when zoomed out.
+      const r = Math.max(0.9, Math.min(4, 0.45 * 2 ** (this.map.getZoom() - 4)));
+      this.recLayer.eachLayer((m) => m.setRadius(m.options.est ? r : r * 0.85));
     }
     async render() {
       const token = (this.token = {});
@@ -582,7 +593,7 @@
     const T = man.tile, ty = Math.floor(c.i / T), tx = Math.floor(c.j / T);
     const name = `${ty}_${tx}`;
     if (!man.tiles.includes(name)) return null;
-    const a = await fetchBin(`tiles/${name}.bin`);
+    const a = await fetchBin(`tiles/${name}${EXT}`);
     const L_ = 3 + man.tile_years.length, cell = (c.i % T) * T + (c.j % T);
     const get = (k, l) => a[(k * L_ + l) * T * T + cell];
     const out = {};
