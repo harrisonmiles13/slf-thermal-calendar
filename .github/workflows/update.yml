@@ -1,0 +1,66 @@
+name: Update maps
+
+# Daily: recompute the current and previous year from NOAA nClimGrid-Daily,
+# rebuild the point tiles, and publish site/ to the gh-pages branch.
+# Years whose twelve monthly grids are all final ("scaled") are committed to
+# main, so the repository keeps a permanent record without daily data churn.
+
+on:
+  schedule:
+    - cron: "37 13 * * *"   # nClimGrid prelim grids usually post by ~08:00 UTC
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ["site/**", "pipeline/**", ".github/workflows/update.yml"]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-maps
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: pipeline/requirements.txt
+
+      - run: pip install -r pipeline/requirements.txt
+
+      - name: Recompute current and previous year
+        run: |
+          Y=$(date -u +%Y); P=$((Y - 1))
+          python pipeline/build_grids.py "$P" "$Y" --jobs 2
+          python pipeline/build_site.py --years "$P" "$Y"
+          python pipeline/assemble_page.py
+
+      - name: Test
+        run: python tests/test_model.py
+
+      - name: Commit finalised years
+        run: |
+          final=$(python -c "import json; m=json.load(open('site/data/grid/manifest.json')); print(' '.join(y for y, v in m['years'].items() if v.get('final')))")
+          for y in $final; do git add "site/data/grid/$y"; done
+          if ! git diff --cached --quiet; then
+            git add site/data/grid/manifest.json site/index.html
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git commit -m "Add finalised nClimGrid years: $final"
+            git push
+          fi
+
+      - name: Publish to gh-pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./site
+          force_orphan: true
+          commit_message: "Maps updated"

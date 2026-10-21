@@ -1,0 +1,5 @@
+pipeline/cache/
+site/data/grid/tiles/
+__pycache__/
+*.pyc
+.DS_Store

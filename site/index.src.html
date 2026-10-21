@@ -1,0 +1,327 @@
+<title>SLF Thermal Calendar</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="When spotted lanternfly life stages arrive across the United States: maps of the date each degree-day threshold is reached, against the 1991–2020 normal.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap">
+<style>
+/*LEAFLET_CSS*/
+/* Layout: control bar over a dominant map, location panel to the right
+   (stacked below on narrow screens), methods underneath. */
+:root {
+  --bg: #eef1ef;          /* field-sheet grey-green */
+  --surface: #fbfcfb;
+  --ink: #141716;
+  --ink-2: #4a514e;
+  --muted: #6c7470;
+  --line: #d3d9d5;
+  --accent: #b4122c;      /* SLF hind-wing red */
+  --accent-ink: #ffffff;
+  --accent-soft: #f6dde1;
+  --map-bg: #dfe4e1;
+  --map-line: rgba(25, 30, 28, 0.55);
+  --band: rgba(74, 81, 78, 0.16);
+  --c-normal: #4a514e;
+  --c-year: #b4122c;
+  --c-live: #1f5f9f;
+  --early: #a50f15;
+  --late: #1f5f9f;
+  --font-display: "Barlow Condensed", "Arial Narrow", "Roboto Condensed", system-ui, sans-serif;
+  --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --r: 6px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1211; --surface: #171b1a; --ink: #e8ece9; --ink-2: #bcc4c0; --muted: #8f9893; --line: #2b322f;
+    --accent: #ff5d73; --accent-ink: #1a0005; --accent-soft: #3a1820; --map-bg: #1c2120;
+    --map-line: rgba(235, 240, 237, 0.5); --band: rgba(188, 196, 192, 0.16);
+    --c-normal: #bcc4c0; --c-year: #ff5d73; --c-live: #6fb0ec; --early: #ff7b6b; --late: #6fb0ec;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f1211; --surface: #171b1a; --ink: #e8ece9; --ink-2: #bcc4c0; --muted: #8f9893; --line: #2b322f;
+  --accent: #ff5d73; --accent-ink: #1a0005; --accent-soft: #3a1820; --map-bg: #1c2120;
+  --map-line: rgba(235, 240, 237, 0.5); --band: rgba(188, 196, 192, 0.16);
+  --c-normal: #bcc4c0; --c-year: #ff5d73; --c-live: #6fb0ec; --early: #ff7b6b; --late: #6fb0ec;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font: 15px/1.5 var(--font-body);
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 0 32px;
+}
+a { color: var(--accent); text-underline-offset: 2px; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+[hidden] { display: none !important; }
+.wrap { max-width: 1480px; margin: 0 auto; }
+
+/* ---------- header */
+.top { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 12px 24px; padding-block: 22px 14px; }
+.brand h1 { font: 700 clamp(30px, 4.4vw, 46px)/0.95 var(--font-display); letter-spacing: 0.01em; margin: 0; text-transform: uppercase; text-wrap: balance; }
+.brand h1 span { color: var(--accent); }
+.brand p { margin: 8px 0 0; color: var(--ink-2); max-width: 62ch; }
+.season { display: flex; height: 6px; width: min(340px, 100%); margin-top: 12px; border-radius: 3px; overflow: hidden; gap: 2px; }
+.season i { flex: 1; }
+.meta { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; font: 500 13px/1.3 var(--font-mono); color: var(--muted); }
+
+/* ---------- controls */
+.controls { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: end; padding: 12px 14px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r) var(--r) 0 0; }
+.field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.field > span, .label { font: 600 11px/1 var(--font-body); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+select, input[type="search"], input[type="text"] {
+  font: 500 14px/1.2 var(--font-body); color: var(--ink); background: var(--bg);
+  border: 1px solid var(--line); border-radius: var(--r); padding: 8px 10px; min-width: 0; max-width: 100%;
+}
+#thr { min-width: min(300px, 100%); }
+.seg { display: flex; flex-wrap: wrap; gap: 2px; background: var(--bg); border: 1px solid var(--line); border-radius: var(--r); padding: 2px; }
+.seg button, .btn {
+  font: 500 13px/1.2 var(--font-body); color: var(--ink-2); background: transparent; border: 0; border-radius: 4px;
+  padding: 7px 10px; cursor: pointer; white-space: nowrap;
+}
+.seg button:hover { color: var(--ink); background: var(--surface); }
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--surface); }
+.btn { border: 1px solid var(--line); background: var(--surface); color: var(--ink); }
+.btn:hover { border-color: var(--ink-2); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
+.check { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ink-2); padding-block: 8px; }
+.check .dots { display: inline-flex; gap: 3px; }
+.check .dots b { width: 7px; height: 7px; border-radius: 50%; border: 1.2px solid var(--ink); background: transparent; }
+.check .dots b:first-child { background: var(--ink); }
+.stage-row { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; padding: 10px 14px; background: var(--surface); border: 1px solid var(--line); border-top: 0; }
+.stage-row input[type="range"] { flex: 1 1 240px; accent-color: var(--accent); min-width: 0; }
+#stage-date { font: 600 20px/1 var(--font-display); min-width: 70px; text-transform: uppercase; }
+
+/* ---------- app grid */
+.app { display: grid; grid-template-columns: minmax(0, 1fr) 410px; border: 1px solid var(--line); border-top: 0; background: var(--surface); border-radius: 0 0 var(--r) var(--r); }
+.maps { min-width: 0; display: grid; gap: 1px; background: var(--line); }
+.maps.quad { grid-template-columns: 1fr 1fr; }
+.panel { margin: 0; background: var(--surface); display: flex; flex-direction: column; min-width: 0; position: relative; }
+.panel figcaption { padding: 12px 14px 8px; }
+.panel-title { font: 600 21px/1.1 var(--font-display); margin: 0; text-wrap: balance; }
+.panel-sub { margin: 3px 0 0; font-size: 13px; color: var(--muted); }
+.map { height: clamp(380px, 64vh, 740px); background: var(--map-bg); }
+.maps.quad .map { height: clamp(260px, 34vh, 420px); }
+.readout { margin: 0; padding: 6px 14px; font: 13px/1.3 var(--font-mono); color: var(--ink-2); border-top: 1px solid var(--line); min-height: 2.4em; }
+.legend { padding: 4px 14px 12px; }
+.legend-list { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12px; color: var(--ink-2); }
+.legend-list li { display: flex; align-items: center; gap: 5px; white-space: nowrap; }
+.sw { width: 14px; height: 12px; border-radius: 2px; box-shadow: inset 0 0 0 1px rgba(0,0,0,.08); }
+.sw.hatched { background-image: repeating-linear-gradient(135deg, rgba(110,105,95,.55) 0 2px, transparent 2px 6px); }
+.panel.loading .map { opacity: .65; transition: opacity .2s; }
+.leaflet-container { background: var(--map-bg); font: 12px/1.4 var(--font-body); }
+.leaflet-control-attribution { font-size: 10px; }
+.leaflet-image-layer { image-rendering: auto; }
+
+/* ---------- side panel */
+.side { border-left: 1px solid var(--line); padding: 16px 18px 18px; min-width: 0; display: flex; flex-direction: column; gap: 14px; }
+.side h2 { font: 600 26px/1.05 var(--font-display); margin: 2px 0 0; text-wrap: balance; }
+.coords { font: 13px/1.3 var(--font-mono); color: var(--muted); margin: 4px 0 0; }
+form.find { display: flex; gap: 6px; flex-wrap: wrap; }
+form.find input { flex: 1 1 170px; }
+#search-msg { font-size: 13px; color: var(--accent); margin: 0; min-height: 0; }
+#search-msg:empty { display: none; }
+.tbl-wrap { overflow-x: auto; }
+table.stages { width: 100%; border-collapse: collapse; font-size: 13.5px; font-variant-numeric: tabular-nums; }
+table.stages th, table.stages td { text-align: left; padding: 7px 6px 7px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+table.stages thead th { font: 600 11px/1.2 var(--font-body); letter-spacing: .07em; text-transform: uppercase; color: var(--muted); }
+table.stages tbody th { font-weight: 600; }
+table.stages .dd, table.stages .tag { display: block; font: 400 11px/1.3 var(--font-mono); color: var(--muted); }
+table.stages .tag { color: var(--c-live); }
+table.stages .sd { display: block; color: var(--muted); font: 11px/1.3 var(--font-mono); }
+table.stages td.date { white-space: nowrap; }
+td.diff { white-space: nowrap; color: var(--ink-2); }
+td.diff.early { color: var(--early); }
+td.diff.late { color: var(--late); }
+.side-body.loading { opacity: .6; }
+.chart-box { position: relative; }
+.chart-box svg { width: 100%; height: auto; display: block; overflow: visible; }
+.key { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--ink-2); margin: 0 0 4px; padding: 0; list-style: none; }
+.key li { display: flex; align-items: center; gap: 6px; }
+.key i { width: 18px; height: 0; border-top: 2px solid; display: inline-block; }
+.key i.k-normal { border-color: var(--c-normal); }
+.key i.k-band { height: 10px; border: 0; background: var(--band); }
+.key i.k-year { border-color: var(--c-year); }
+.key i.k-live { border-color: var(--c-live); }
+.gridline { stroke: var(--line); stroke-width: 1; }
+.axis { stroke: var(--muted); stroke-width: 1; }
+.tick { fill: var(--muted); font: 10px var(--font-mono); }
+.event-line { stroke: var(--accent); stroke-width: 1; stroke-dasharray: 2 3; opacity: .55; }
+.event-label { fill: var(--ink-2); font: 500 10.5px var(--font-body); }
+.band { fill: var(--band); stroke: none; }
+.normal-line { fill: none; stroke: var(--c-normal); stroke-width: 2; }
+.year-line { fill: none; stroke: var(--c-year); stroke-width: 2; }
+.live-line { fill: none; stroke: var(--c-live); stroke-width: 2; }
+.live-line.fcst { stroke-dasharray: 5 4; }
+.cross { stroke: var(--ink); stroke-width: 1; opacity: .5; }
+#chart-tip { position: absolute; top: 8px; pointer-events: none; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 6px 8px; font: 12px/1.45 var(--font-mono); box-shadow: 0 4px 14px rgba(0,0,0,.12); white-space: nowrap; }
+#chart-tip .k-normal { color: var(--c-normal); } #chart-tip .k-year { color: var(--c-year); } #chart-tip .k-live { color: var(--c-live); }
+.note { font-size: 12.5px; color: var(--muted); margin: 0; }
+
+/* ---------- about */
+.about { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 330px), 1fr)); gap: 28px 40px; padding-block: 34px 8px; }
+.about section { min-width: 0; }
+.about h2 { font: 600 24px/1.1 var(--font-display); margin: 0 0 8px; text-transform: uppercase; letter-spacing: .02em; }
+.about p, .about li { color: var(--ink-2); max-width: 66ch; }
+.about ol, .about ul { padding-left: 20px; }
+.about .refs li { font-size: 13.5px; margin-bottom: 6px; }
+table.params { border-collapse: collapse; font-size: 13.5px; font-variant-numeric: tabular-nums; width: 100%; }
+table.params th, table.params td { text-align: left; padding: 5px 10px 5px 0; border-bottom: 1px solid var(--line); }
+table.params td.num { text-align: right; font-family: var(--font-mono); }
+footer { padding-block: 26px 0; font-size: 12.5px; color: var(--muted); border-top: 1px solid var(--line); margin-top: 24px; }
+
+@media (max-width: 1080px) {
+  .app { grid-template-columns: minmax(0, 1fr); }
+  .side { border-left: 0; border-top: 1px solid var(--line); }
+}
+@media (max-width: 720px) {
+  .maps.quad { grid-template-columns: 1fr; }
+  .map { height: 48vh; min-height: 300px; }
+  #thr { min-width: 0; width: 100%; }
+  .controls .field { flex: 1 1 100%; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div class="brand">
+      <h1>SLF <span>Thermal</span> Calendar</h1>
+      <p>When spotted lanternfly reaches each life stage across the United States, from heat accumulated since January&nbsp;1. Pick a stage, then compare this year to the 1991–2020 normal.</p>
+      <div class="season" aria-hidden="true"><i style="background:#d6d2c8"></i><i style="background:#fde725"></i><i style="background:#7ad151"></i><i style="background:#22a884"></i><i style="background:#2a788e"></i><i style="background:#414487"></i><i style="background:#440154"></i></div>
+    </div>
+    <div class="meta"><span id="updated">Loading data…</span><button class="btn" id="copy-link" type="button">Copy link</button></div>
+  </header>
+
+  <div class="controls" role="group" aria-label="Map settings">
+    <label class="field"><span>Stage or threshold</span><select id="thr"></select></label>
+    <label class="field"><span>Year</span><select id="year"></select></label>
+    <div class="field" id="view-tabs"><span>Map</span>
+      <div class="seg" role="group" aria-label="Map type">
+        <button type="button" data-view="date">Date reached</button>
+        <button type="button" data-view="anom">vs. normal</button>
+        <button type="button" data-view="normal">Normal</button>
+        <button type="button" data-view="sd">Variability</button>
+        <button type="button" data-view="pct">Years reached</button>
+        <button type="button" data-view="stage">Stage on date</button>
+        <button type="button" data-view="heat">Heat to date</button>
+      </div>
+    </div>
+    <div class="field"><span>Layout</span>
+      <div class="seg" id="layout" role="group" aria-label="Layout">
+        <button type="button" data-layout="single">One map</button>
+        <button type="button" data-layout="quad">Four maps</button>
+      </div>
+    </div>
+    <div class="field"><span>Units</span>
+      <div class="seg" id="units" role="group" aria-label="Degree-day units">
+        <button type="button" data-units="F">°F</button>
+        <button type="button" data-units="C">°C</button>
+      </div>
+    </div>
+    <label class="check"><input type="checkbox" id="records"> <span class="dots" aria-hidden="true"><b></b><b></b></span> SLF survey records</label>
+  </div>
+  <div class="stage-row" id="stage-controls" hidden>
+    <button class="btn primary" id="play" type="button">Play season</button>
+    <span id="stage-date">Jul 1</span>
+    <input type="range" id="stage-doy" min="1" max="366" step="1" value="182" aria-label="Day of year">
+    <label class="field"><span>Temperatures</span>
+      <select id="stage-src"><option value="year">Selected year</option><option value="normal">Normal (1991–2020)</option></select>
+    </label>
+  </div>
+
+  <main class="app">
+    <div id="maps" class="maps single"></div>
+    <aside class="side" aria-labelledby="loc-name">
+      <div>
+        <p class="label">Location</p>
+        <h2 id="loc-name">Selected location</h2>
+        <p class="coords" id="loc-coords"></p>
+      </div>
+      <form class="find" id="search" role="search">
+        <input type="search" id="q" placeholder="Town, county, or lat, lon" aria-label="Find a place">
+        <button class="btn" type="submit">Find</button>
+        <button class="btn" type="button" id="locate">Use my location</button>
+      </form>
+      <p id="search-msg" role="status"></p>
+      <div class="side-body" id="side-body">
+        <div class="tbl-wrap">
+          <table class="stages">
+            <caption class="label" style="text-align:left;padding-bottom:6px">SLF life stages here</caption>
+            <thead><tr><th scope="col">Stage</th><th scope="col">Normal</th><th scope="col" id="col-year">Year</th><th scope="col">vs. normal</th></tr></thead>
+            <tbody id="stage-rows"></tbody>
+          </table>
+        </div>
+        <p class="note" id="norm-src"></p>
+      </div>
+      <div>
+        <p class="label" style="margin:0 0 6px">Heat accumulated since Jan 1</p>
+        <ul class="key">
+          <li><i class="k-normal"></i>Normal</li>
+          <li><i class="k-band"></i>± 1 SD</li>
+          <li><i class="k-year"></i><span id="key-year">Year</span></li>
+          <li id="key-live"><i class="k-live"></i>Open-Meteo, dashed = forecast</li>
+        </ul>
+        <div class="chart-box"><div id="chart"></div><div id="chart-tip" hidden></div></div>
+        <p class="note" id="live-status"></p>
+      </div>
+    </aside>
+  </main>
+
+  <div class="about">
+    <section>
+      <h2>How to read it</h2>
+      <p>Insects develop when it is warm enough, so their seasons track accumulated heat better than the calendar. Each map cell adds up the daily heat above 10&nbsp;°C (50&nbsp;°F) from January&nbsp;1 and records the day it passes a threshold.</p>
+      <ul>
+        <li><strong>Date reached</strong>: the day the threshold was passed in the chosen year. Hatched cells have not reached it yet.</li>
+        <li><strong>vs. normal</strong>: days earlier (red) or later (blue) than the 1991–2020 average.</li>
+        <li><strong>Normal</strong> and <strong>Variability</strong>: the 30-year mean date and its standard deviation.</li>
+        <li><strong>Years reached</strong>: how often a stage is reached at all. Where egg laying rarely completes, the climate limits SLF.</li>
+        <li><strong>Stage on date</strong>: the most advanced SLF stage on any day; press Play to watch the season move north.</li>
+      </ul>
+      <p>Click anywhere for the stage dates and heat curve at that spot. In the current year the panel adds live weather and a 16-day forecast from Open-Meteo, and projects later stages assuming normal temperatures. Points outside the contiguous US (for example southern Canada) use Open-Meteo for both the season and the normal.</p>
+    </section>
+    <section>
+      <h2>The SLF model</h2>
+      <p>Degree-days use the DDRP spotted lanternfly model of Barker, Beyer &amp; Coop (2025): lower threshold 10&nbsp;°C, upper threshold 35&nbsp;°C with a horizontal cutoff, single-triangle method, started on January&nbsp;1.</p>
+      <table class="params">
+        <thead><tr><th>Event</th><th style="text-align:right">°C·days</th><th style="text-align:right">°F·days</th></tr></thead>
+        <tbody>
+          <tr><td>First egg hatch (earliest cohort)</td><td class="num">135</td><td class="num">243</td></tr>
+          <tr><td>Egg hatch</td><td class="num">202</td><td class="num">364</td></tr>
+          <tr><td>Nymphs halfway developed (+442)</td><td class="num">644</td><td class="num">1,159</td></tr>
+          <tr><td>First adults (+890 nymphal)</td><td class="num">1,092</td><td class="num">1,966</td></tr>
+          <tr><td>First egg laying (+630 pre-oviposition)</td><td class="num">1,722</td><td class="num">3,100</td></tr>
+          <tr><td>50% egg laying (+146)</td><td class="num">1,868</td><td class="num">3,362</td></tr>
+        </tbody>
+      </table>
+      <p class="note" style="margin-top:8px">Values from the model's published parameter file (SLF.params, DDRP v3). The model predicts timing only; it does not say whether SLF is present.</p>
+    </section>
+    <section>
+      <h2>Data and limits</h2>
+      <ul>
+        <li><strong>Temperature</strong>: NOAA nClimGrid-Daily (contiguous US, about 5&nbsp;km), averaged to 1/12° (about 8&nbsp;km). Recent weeks use NOAA's preliminary grids, which are revised later. Maps refresh daily.</li>
+        <li><strong>SLF records</strong>: survey data aggregated to 10&nbsp;km cells by lydemapr v4.1.0 (De Bona et al. 2023), through 2025. Filled dots mark cells with an established population, open dots cells with any other SLF record. Absence of a dot does not mean SLF is absent.</li>
+        <li>Grid cells average terrain and microclimate; sunny walls, cities and valley floors can run days ahead of the map.</li>
+        <li>Model output is a planning aid for scouting and treatment timing. Confirm stages in the field.</li>
+      </ul>
+    </section>
+    <section>
+      <h2>Sources</h2>
+      <ol class="refs">
+        <li>Barker, B.S., Beyer, J. &amp; Coop, L. (2025). Real-time integrative mapping of the phenology and climatic suitability for the spotted lanternfly, <i>Lycorma delicatula</i>. <i>Insects</i> 16: 790. <a href="https://doi.org/10.3390/insects16080790">doi:10.3390/insects16080790</a></li>
+        <li>Durre, I. et al. (2022). NOAA's nClimGrid-Daily version 1. NOAA National Centers for Environmental Information. <a href="https://registry.opendata.aws/noaa-nclimgrid/">AWS Open Data</a></li>
+        <li>De Bona, S. et al. (2023). lydemapr: an R package to track the spread of the invasive spotted lanternfly. <i>NeoBiota</i> 86: 151–168. <a href="https://doi.org/10.3897/neobiota.86.101471">doi:10.3897/neobiota.86.101471</a> (data CC BY 4.0)</li>
+        <li>Concept after the USA National Phenology Network <a href="https://www.usanpn.org/data/maps/thermal_calendars">Thermal Calendars</a>. Not affiliated with USA-NPN, NOAA or USDA.</li>
+        <li>Live weather: <a href="https://open-meteo.com/">Open-Meteo</a> (CC BY 4.0). Basemap © OpenStreetMap contributors, © CARTO.</li>
+      </ol>
+    </section>
+  </div>
+  <footer>Code MIT · <a href="https://github.com/harrisonmiles13/slf-thermal-calendar">github.com/harrisonmiles13/slf-thermal-calendar</a></footer>
+</div>
+<!--SCRIPTS-->
